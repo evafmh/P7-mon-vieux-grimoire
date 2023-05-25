@@ -1,8 +1,7 @@
 const express = require("express");
 const mongoose = require("mongoose");
 
-const Book = require("./models/Book");
-const User = require("./models/User");
+const bookRoutes = require("./routes/bookRoutes");
 
 // Créer une application Express
 const app = express();
@@ -38,48 +37,6 @@ app.use((req, res, next) => {
 });
 
 // Routes
-
-// Route pour créer un livre
-app.post("/api/books", (req, res) => {
-    // Logique pour créer un livre dans la base de données
-    res.status(201).json({
-        message: "Livre créé avec succès !",
-    });
-});
-
-// Route pour obtenir la liste des livres
-app.get("/api/books", (req, res) => {
-    // Logique pour obtenir la liste des livres depuis la base de données
-    Book.find()
-        .then((books) => {
-            res.status(200).json(books);
-        })
-        .catch((error) => {
-            res.status(500).json({
-                error: "Une erreur est survenue lors de la récupération des livres.",
-            });
-        });
-});
-
-// Route pour obtenir les détails d'un livre spécifique
-app.get("/api/books/:id", (req, res) => {
-    const bookId = req.params;
-    // Logique pour obtenir les détails du livre depuis la base de données
-    Book.findById(bookId)
-        .then((book) => {
-            if (!book) {
-                return res.status(404).json({
-                    error: "Livre non trouvé.",
-                });
-            }
-
-            res.status(200).json(book);
-        })
-        .catch((error) => {
-            res.status(500).json({
-                error: "Une erreur est survenue lors de la récupération du livre.",
-            });
-        });
-});
+app.use("/api/books", bookRoutes);
 
 module.exports = app;
