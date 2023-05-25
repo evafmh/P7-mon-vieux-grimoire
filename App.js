@@ -2,6 +2,7 @@ const express = require("express");
 const mongoose = require("mongoose");
 
 const bookRoutes = require("./routes/bookRoutes");
+const userRoutes = require("./routes/userRoutes");
 
 // Créer une application Express
 const app = express();
@@ -38,5 +39,6 @@ app.use((req, res, next) => {
 
 // Routes
 app.use("/api/books", bookRoutes);
+app.use("/api/auth", userRoutes);
 
 module.exports = app;
