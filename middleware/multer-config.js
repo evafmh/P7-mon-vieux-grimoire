@@ -22,4 +22,51 @@ const storage = multer.diskStorage({
     },
 });
 
-module.exports = multer({ storage }).single("image");
+// Stockage d'un fichier image
+const upload = multer({ storage: storage }).single("image");
+
+// Redimensionnement de l'image
+const compressImage = (req, res, next) => {
+    // Vérifie s'il y a bien un fichier
+    if (!req.file) {
+        return next();
+    }
+
+    //Récupère l'image
+    const filePath = req.file.path;
+
+    sharp(filePath)
+        .resize({ width: 500 })
+        .webp({ quality: 85 })
+        .toBuffer()
+        .then((data) => {
+            sharp(data)
+                .toFile(filePath)
+                .then(() => {
+                    next();
+                })
+                .catch((err) => {
+                    next(err);
+                });
+        })
+        .catch((err) => {
+            next(err);
+        });
+};
+
+// Téléchargement de l'image
+const uploadImage = (req, res, next) => {
+    upload(req, res, function (err) {
+        if (err) {
+            return res.status(400).json({
+                message:
+                    "Une erreur est survenue lors du téléchargement du fichier.",
+            });
+        }
+        next();
+    });
+};
+module.exports = {
+    uploadImage,
+    compressImage,
+};
