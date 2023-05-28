@@ -1,31 +1,5 @@
 const Book = require("../models/Book");
 
-// Créer un livre
-exports.createBook = (req, res, next) => {
-    const book = new Book({
-        userId: req.body.userId,
-        title: req.body.title,
-        author: req.body.author,
-        imageUrl: req.body.imageUrl,
-        year: req.body.year,
-        genre: req.body.genre,
-        ratings: req.body.ratings,
-        averageRating: req.body.averageRating,
-    });
-
-    book.save()
-        .then(() => {
-            res.status(201).json({
-                message: "Livre créé avec succès !",
-            });
-        })
-        .catch((error) => {
-            res.status(400).json({
-                error: error,
-            });
-        });
-};
-
 // Obtenir la liste des livres
 exports.getAllBooks = (req, res, next) => {
     // Logique pour obtenir la liste des livres depuis la base de données
@@ -57,6 +31,35 @@ exports.getBookById = (req, res, next) => {
         .catch((error) => {
             res.status(500).json({
                 error: "Une erreur est survenue lors de la récupération du livre.",
+            });
+        });
+};
+
+// Créer un livre
+exports.createBook = (req, res, next) => {
+    const bookData = JSON.parse(req.body.book);
+
+    delete bookData._id;
+    delete bookData._userId;
+
+    const book = new Book({
+        ...bookData,
+        userId: req.auth.userId,
+        imageUrl: `${req.protocol}://${req.get("host")}/images/${
+            req.file.filename
+        }`,
+        averageRating: bookData.ratings[0].grade,
+    });
+
+    book.save()
+        .then(() => {
+            res.status(201).json({
+                message: "Livre créé avec succès !",
+            });
+        })
+        .catch((error) => {
+            res.status(400).json({
+                error: error,
             });
         });
 };
