@@ -19,8 +19,11 @@ const bookSchema = new mongoose.Schema({
     imageUrl: { type: String, required: true },
     year: { type: Number, required: true },
     genre: { type: String, required: true },
-    ratings: [ratingSchema],
-    averageRating: { type: Number, default: 3 },
+    ratings: {
+        type: [ratingSchema],
+        default: [],
+    },
+    averageRating: { type: Number, default: 0 },
 });
 
 const Book = mongoose.model("Book", bookSchema);

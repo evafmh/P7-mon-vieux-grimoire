@@ -35,6 +35,21 @@ exports.getBookById = (req, res, next) => {
         });
 };
 
+// Obtenir les livres ayant la meilleure note
+exports.getBooksByBestRating = (req, res, next) => {
+    Book.find()
+        .sort({ averageRating: -1 })
+        .limit(3)
+        .then((books) => {
+            res.status(200).json(books);
+        })
+        .catch((error) => {
+            res.status(500).json({
+                error: "Une erreur est survenue lors de la récupération des livres avec la meilleure note.",
+            });
+        });
+};
+
 // Créer un livre
 exports.createBook = (req, res, next) => {
     const bookData = JSON.parse(req.body.book);
@@ -48,7 +63,8 @@ exports.createBook = (req, res, next) => {
         imageUrl: `${req.protocol}://${req.get("host")}/images/${
             req.file.filename
         }`,
-        averageRating: bookData.ratings[0].grade,
+        averageRating: 0, // Initialise la note moyenne à 0
+        ratings: [], // Initialise le tableau d'évaluations à vide
     });
 
     book.save()

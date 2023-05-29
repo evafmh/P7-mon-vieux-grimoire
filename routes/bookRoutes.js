@@ -8,6 +8,9 @@ const bookController = require("../controllers/bookController");
 // Obtenir la liste des livres
 router.get("/", bookController.getAllBooks);
 
+// Obtenir les livres ayant la meilleure note
+router.get("/bestrating", bookController.getBooksByBestRating);
+
 // Obtenir les détails d'un livre spécifique
 router.get("/:id", bookController.getBookById);
 
