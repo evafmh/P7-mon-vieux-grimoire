@@ -80,12 +80,43 @@ exports.createBook = (req, res, next) => {
         });
 };
 
-// Mettre à jour un livre
+// Modifier un livre
 exports.updateBook = (req, res, next) => {
-    const bookId = req.params.id;
-    // Logique pour mettre à jour le livre dans la base de données
-    res.status(200).json({
-        message: "Livre mis à jour avec succès !",
+    // Vérifie si une image a été téléchargée, si oui on traite l'image sinon on traite l'objet
+    const bookData = req.file
+        ? {
+              ...JSON.parse(req.body.book),
+              // Mise à jour de l'imageUrl du livre avec la nouvelle image
+              imageUrl: `${req.protocol}://${req.get("host")}/images/${
+                  req.file.filename
+              }`,
+          }
+        : { ...req.body };
+    delete bookData._userId;
+    // Recherche le livre en fonction de l'id
+    Book.findOne({ _id: req.params.id }).then((book) => {
+        // Vérifie que l'utilisateur est le créateur du livre
+        if (book.userId.toString() !== req.auth.userId) {
+            console.log("book.userId:", book.userId);
+            console.log("req.auth.userId:", req.auth.userId);
+            res.status(401).json({
+                message: "Vous n'êtes pas autorisé à modifier le livre.",
+            });
+        } else {
+            // Mettre à jour les données du livre
+            Book.updateOne(
+                { _id: req.params.id },
+                { ...bookData, _id: req.params.id }
+            )
+                .then(() =>
+                    res.status(201).json({
+                        message: "Livre modifié avec succès !",
+                    })
+                )
+                .catch((error) => {
+                    res.status(400).json({ error });
+                });
+        }
     });
 };
 
