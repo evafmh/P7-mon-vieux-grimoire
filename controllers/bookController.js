@@ -1,4 +1,5 @@
 const Book = require("../models/Book");
+const fs = require("fs");
 
 // Obtenir la liste des livres
 exports.getAllBooks = (req, res, next) => {
@@ -97,8 +98,6 @@ exports.updateBook = (req, res, next) => {
     Book.findOne({ _id: req.params.id }).then((book) => {
         // Vérifie que l'utilisateur est le créateur du livre
         if (book.userId.toString() !== req.auth.userId) {
-            console.log("book.userId:", book.userId);
-            console.log("req.auth.userId:", req.auth.userId);
             res.status(401).json({
                 message: "Vous n'êtes pas autorisé à modifier le livre.",
             });
@@ -122,9 +121,30 @@ exports.updateBook = (req, res, next) => {
 
 // Supprimer un livre
 exports.deleteBook = (req, res, next) => {
+    // Recherche l'id du livre à supprimer dans la base de données
     const bookId = req.params.id;
-    // Logique pour supprimer le livre de la base de données
-    res.status(200).json({
-        message: "Livre supprimé avec succès !",
-    });
+    Book.findOne({ _id: bookId })
+        .then((book) => {
+            // Vérifie que l'utilisateur est le créateur du livre
+            if (book.userId.toString() !== req.auth.userId) {
+                res.status(401).json({
+                    message: "Vous n'êtes pas autorisé à supprimer ce livre.",
+                });
+            } else {
+                // Récupère le nom du fichier
+                const filename = book.imageUrl.split("/images/")[1];
+                // Supprime le fichier
+                fs.unlink(`images/${filename}`, () => {
+                    // Supprime le livre de la base de données
+                    Book.deleteOne({ _id: bookId })
+                        .then(() =>
+                            res.status(201).json({
+                                message: "Livre supprimé avec succès !",
+                            })
+                        )
+                        .catch((error) => res.status(400).json({ error }));
+                });
+            }
+        })
+        .catch((error) => res.status(500).json({ error }));
 };
