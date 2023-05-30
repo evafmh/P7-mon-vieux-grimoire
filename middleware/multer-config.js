@@ -36,7 +36,7 @@ const compressImage = (req, res, next) => {
     const filePath = req.file.path;
 
     sharp(filePath)
-        .resize({ width: 500 })
+        .resize({ fit: "cover", height: 643, width: 500 })
         .webp({ quality: 85 })
         .toBuffer()
         .then((data) => {
