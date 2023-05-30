@@ -6,6 +6,12 @@ exports.getAllBooks = (req, res, next) => {
     // Logique pour obtenir la liste des livres depuis la base de données
     Book.find()
         .then((books) => {
+            if (books.length === 0) {
+                return res.status(404).json({
+                    message: "Aucun livre trouvé.",
+                });
+            }
+
             res.status(200).json(books);
         })
         .catch((error) => {
@@ -53,32 +59,51 @@ exports.getBooksByBestRating = (req, res, next) => {
 
 // Créer un livre
 exports.createBook = (req, res, next) => {
-    const bookData = JSON.parse(req.body.book);
+    try {
+        const bookData = JSON.parse(req.body.book);
 
-    delete bookData._id;
-    delete bookData._userId;
+        delete bookData._id;
+        delete bookData._userId;
 
-    const book = new Book({
-        ...bookData,
-        userId: req.auth.userId,
-        imageUrl: `${req.protocol}://${req.get("host")}/images/${
-            req.file.filename
-        }`,
-        averageRating: 0, // Initialise la note moyenne à 0
-        ratings: [], // Initialise le tableau d'évaluations à vide
-    });
+        // Vérifie si le livre existe déjà en vérifiant le titre et l'auteur
+        Book.findOne({ title: bookData.title, author: bookData.author })
+            .then((existingBook) => {
+                if (existingBook) {
+                    throw new Error("Ce livre existe déjà.");
+                }
 
-    book.save()
-        .then(() => {
-            res.status(201).json({
-                message: "Livre créé avec succès !",
+                const book = new Book({
+                    ...bookData,
+                    userId: req.auth.userId,
+                    imageUrl: `${req.protocol}://${req.get("host")}/images/${
+                        req.file.filename
+                    }`,
+                    averageRating: 0, // Initialise la note moyenne à 0
+                    ratings: [], // Initialise le tableau d'évaluations à vide
+                });
+
+                book.save()
+                    .then(() => {
+                        res.status(201).json({
+                            message: "Livre créé avec succès !",
+                        });
+                    })
+                    .catch((error) => {
+                        res.status(500).json({
+                            error: error.message,
+                        });
+                    });
+            })
+            .catch((error) => {
+                res.status(500).json({
+                    error: error.message,
+                });
             });
-        })
-        .catch((error) => {
-            res.status(400).json({
-                error: error,
-            });
+    } catch (error) {
+        res.status(400).json({
+            error: error.message,
         });
+    }
 };
 
 // Modifier un livre
@@ -94,6 +119,7 @@ exports.updateBook = (req, res, next) => {
           }
         : { ...req.body };
     delete bookData._userId;
+
     // Recherche le livre en fonction de l'id
     Book.findOne({ _id: req.params.id })
         .then((book) => {
@@ -104,7 +130,7 @@ exports.updateBook = (req, res, next) => {
                 });
             } else if (book.userId.toString() !== req.auth.userId) {
                 // Vérifie que l'utilisateur est le créateur du livre
-                res.status(401).json({
+                res.status(403).json({
                     message: "Vous n'êtes pas autorisé à modifier ce livre.",
                 });
             } else {
@@ -148,9 +174,14 @@ exports.deleteBook = (req, res, next) => {
     const bookId = req.params.id;
     Book.findOne({ _id: bookId })
         .then((book) => {
-            // Vérifie que l'utilisateur est le créateur du livre
-            if (book.userId.toString() !== req.auth.userId) {
-                res.status(401).json({
+            // Vérifie si le livre a été trouvé
+            if (!book) {
+                res.status(404).json({
+                    message: "Livre non trouvé.",
+                });
+                // Vérifie que l'utilisateur est le créateur du livre
+            } else if (book.userId.toString() !== req.auth.userId) {
+                res.status(403).json({
                     message: "Vous n'êtes pas autorisé à supprimer ce livre.",
                 });
             } else {
@@ -161,7 +192,7 @@ exports.deleteBook = (req, res, next) => {
                     // Supprime le livre de la base de données
                     Book.deleteOne({ _id: bookId })
                         .then(() =>
-                            res.status(201).json({
+                            res.status(200).json({
                                 message: "Livre supprimé avec succès !",
                             })
                         )
