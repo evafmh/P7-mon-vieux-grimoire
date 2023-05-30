@@ -95,28 +95,51 @@ exports.updateBook = (req, res, next) => {
         : { ...req.body };
     delete bookData._userId;
     // Recherche le livre en fonction de l'id
-    Book.findOne({ _id: req.params.id }).then((book) => {
-        // Vérifie que l'utilisateur est le créateur du livre
-        if (book.userId.toString() !== req.auth.userId) {
-            res.status(401).json({
-                message: "Vous n'êtes pas autorisé à modifier le livre.",
-            });
-        } else {
-            // Mettre à jour les données du livre
-            Book.updateOne(
-                { _id: req.params.id },
-                { ...bookData, _id: req.params.id }
-            )
-                .then(() =>
-                    res.status(201).json({
-                        message: "Livre modifié avec succès !",
-                    })
-                )
-                .catch((error) => {
-                    res.status(400).json({ error });
+    Book.findOne({ _id: req.params.id })
+        .then((book) => {
+            // Vérifie si le livre a été trouvé
+            if (!book) {
+                res.status(404).json({
+                    message: "Livre non trouvé.",
                 });
-        }
-    });
+            } else if (book.userId.toString() !== req.auth.userId) {
+                // Vérifie que l'utilisateur est le créateur du livre
+                res.status(401).json({
+                    message: "Vous n'êtes pas autorisé à modifier ce livre.",
+                });
+            } else {
+                // si un fichier a été chargé
+                if (req.file) {
+                    // Récupère le nom du fichier de l'ancienne image
+                    const oldFilename = book.imageUrl.split("/images/")[1];
+                    // Supprime l'ancienne image de manière synchrone
+                    try {
+                        fs.unlinkSync(`images/${oldFilename}`);
+                    } catch (error) {
+                        console.error(
+                            "Erreur lors de la suppression de l'ancienne image",
+                            error
+                        );
+                    }
+                }
+                // Mettre à jour les données du livre
+                Book.updateOne(
+                    { _id: req.params.id },
+                    { ...bookData, _id: req.params.id }
+                )
+                    .then(() =>
+                        res.status(200).json({
+                            message: "Livre modifié avec succès !",
+                        })
+                    )
+                    .catch((error) => {
+                        res.status(400).json({ error });
+                    });
+            }
+        })
+        .catch((error) => {
+            res.status(500).json({ error });
+        });
 };
 
 // Supprimer un livre
