@@ -57,6 +57,33 @@ exports.getBooksByBestRating = (req, res, next) => {
         });
 };
 
+//Vérifie le format des inputs du livre
+const checkInputFormat = (title, author, genre, year) => {
+    const errors = [];
+
+    const titleRegex = /^[a-zA-Z0-9\sÀ-ÿ&;!?$£€.,':()]{3,50}$/; // Alphanumérique, espaces et caractères spéciaux
+    const textOnlyRegex = /^[a-zA-Z\sÀ-ÿ]{3,50}$/; // Alphabet, espaces et accents
+    const yearRegex = /^\d{4}$/; // Format YYYY
+
+    if (title && !titleRegex.test(title)) {
+        errors.push("Le format du titre est invalide.");
+    }
+
+    if (author && !textOnlyRegex.test(author)) {
+        errors.push("Le format de l'auteur est invalide.");
+    }
+
+    if (year && !yearRegex.test(year)) {
+        errors.push("L'année doit être au format YYYY.");
+    }
+
+    if (genre && !textOnlyRegex.test(genre)) {
+        errors.push("Le format du genre est invalide.");
+    }
+
+    return errors;
+};
+
 // Créer un livre
 exports.createBook = (req, res, next) => {
     try {
@@ -70,6 +97,14 @@ exports.createBook = (req, res, next) => {
             .then((existingBook) => {
                 if (existingBook) {
                     throw new Error("Ce livre existe déjà.");
+                }
+
+                const { title, author, genre, year } = bookData;
+
+                const errors = checkInputFormat(title, author, genre, year);
+
+                if (errors.length > 0) {
+                    return res.status(400).json({ error: errors.join(" ") });
                 }
 
                 const book = new Book({
@@ -148,6 +183,15 @@ exports.updateBook = (req, res, next) => {
                         );
                     }
                 }
+
+                // Vérifie le format des champs
+                const { title, author, genre, year } = bookData;
+                const errors = checkInputFormat(title, author, genre, year);
+
+                if (errors.length > 0) {
+                    return res.status(400).json({ error: errors.join(" ") });
+                }
+
                 // Mettre à jour les données du livre
                 Book.updateOne(
                     { _id: req.params.id },
