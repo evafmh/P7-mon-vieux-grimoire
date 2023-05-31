@@ -3,6 +3,7 @@ const router = express.Router();
 
 const auth = require("../middleware/auth");
 const { uploadImage, compressImage } = require("../middleware/multer-config");
+const { validateBookFields } = require("../middleware/bookInputsValidation");
 const bookController = require("../controllers/bookController");
 
 // Obtenir la liste des livres
@@ -15,10 +16,24 @@ router.get("/bestrating", bookController.getBooksByBestRating);
 router.get("/:id", bookController.getBookById);
 
 // Créer un livre
-router.post("/", auth, uploadImage, compressImage, bookController.createBook);
+router.post(
+    "/",
+    auth,
+    uploadImage,
+    compressImage,
+    validateBookFields,
+    bookController.createBook
+);
 
 // Mettre à jour un livre
-router.put("/:id", auth, uploadImage, compressImage, bookController.updateBook);
+router.put(
+    "/:id",
+    auth,
+    uploadImage,
+    compressImage,
+    validateBookFields,
+    bookController.updateBook
+);
 
 // Supprimer un livre
 router.delete("/:id", auth, bookController.deleteBook);
