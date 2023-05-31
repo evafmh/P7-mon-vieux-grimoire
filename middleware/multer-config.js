@@ -22,8 +22,24 @@ const storage = multer.diskStorage({
     },
 });
 
+// Filtrage des types de fichiers acceptés
+const fileFilter = (req, file, callback) => {
+    const isValid = MIME_TYPES[file.mimetype];
+    if (isValid) {
+        callback(null, true);
+    } else {
+        callback(new Error("Type de fichier non pris en charge."), false);
+    }
+};
+
 // Stockage d'un fichier image
-const upload = multer({ storage: storage }).single("image");
+const upload = multer({
+    storage: storage,
+    limits: {
+        fileSize: 4 * 1024 * 1024, // Limite la taille des fichiers à 4 Mo
+    },
+    fileFilter: fileFilter,
+}).single("image");
 
 // Redimensionnement de l'image
 const compressImage = (req, res, next) => {
@@ -58,14 +74,25 @@ const compressImage = (req, res, next) => {
 const uploadImage = (req, res, next) => {
     upload(req, res, function (err) {
         if (err) {
-            return res.status(400).json({
-                message:
-                    "Une erreur est survenue lors du téléchargement du fichier.",
-            });
+            if (err.code === "LIMIT_FILE_SIZE") {
+                // Erreur de taille de fichier
+                return res.status(400).json({
+                    message:
+                        "La taille du fichier est trop importante (4 Mo maximum).",
+                });
+            } else if (err.message === "Type de fichier non pris en charge.") {
+                // Erreur de type de fichier non pris en charge
+                return res.status(400).json({ message: err.message });
+            } else {
+                // Autre erreur
+                return res.status(400).json({ message: err.message });
+            }
         }
+
         next();
     });
 };
+
 module.exports = {
     uploadImage,
     compressImage,
