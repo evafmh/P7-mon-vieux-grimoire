@@ -23,4 +23,6 @@ router.put("/:id", auth, uploadImage, compressImage, bookController.updateBook);
 // Supprimer un livre
 router.delete("/:id", auth, bookController.deleteBook);
 
+router.post("/:id/rating", bookController.rateBook);
+
 module.exports = router;

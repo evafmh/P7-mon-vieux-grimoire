@@ -246,3 +246,95 @@ exports.deleteBook = (req, res, next) => {
         })
         .catch((error) => res.status(500).json({ error }));
 };
+
+//Notation des livres
+
+//Noter un livre
+exports.rateBook = (req, res, next) => {
+    const bookId = req.params.id;
+    const { userId, rating } = req.body;
+
+    delete req.body._id;
+
+    // Vérifie que la note est comprise entre 0 et 5
+    const ratingFormat = /^[0-5]$/;
+    if (!ratingFormat.test(rating)) {
+        return res.status(400).json({
+            message: "La note doit être un chiffre entre 0 et 5.",
+        });
+    }
+
+    Book.findById(bookId)
+        // Vérifie si le livre existe
+        .then((book) => {
+            if (!book) {
+                throw new Error("Livre introuvable.");
+            }
+
+            return Book.findOne({ _id: bookId, "ratings.userId": userId }).then(
+                (alreadyRated) => {
+                    if (alreadyRated) {
+                        throw new Error("Vous avez déjà noté ce livre.");
+                    }
+
+                    // Met à jour la moyenne des notations
+                    const grades = book.ratings.map((rating) => rating.grade);
+                    const sumRatings = grades.reduce(
+                        (total, grade) => total + grade,
+                        0
+                    );
+
+                    const newTotalRating = sumRatings + rating;
+                    const newAverageRating = Number(
+                        (newTotalRating / (book.ratings.length + 1)).toFixed(1)
+                    );
+
+                    // Mise à jour des données du livre dans la base de données
+                    book.averageRating = newAverageRating;
+                    book.totalRating += rating;
+                    // Sauvegarde les modifications du livre dans la base de données
+                    return (
+                        Book.findByIdAndUpdate(
+                            bookId,
+                            {
+                                $push: {
+                                    ratings: { userId, grade: rating },
+                                },
+                                averageRating: newAverageRating,
+                            },
+                            { new: true }
+                        )
+                            // Le livre a été mis à jour avec la nouvelle note
+
+                            .then((updatedBook) => {
+                                res.status(201).json({
+                                    message: "Livre noté avec succès.",
+                                    book: {
+                                        ...updatedBook,
+                                        id: updatedBook._id,
+                                    },
+                                });
+                            })
+                    );
+                }
+            );
+        })
+
+        // Une erreur s'est produite lors de la notation du livre
+        .catch((error) => {
+            if (error.message === "Livre introuvable.") {
+                return res.status(404).json({
+                    message: "Livre introuvable.",
+                });
+            } else if (error.message === "Vous avez déjà noté ce livre.") {
+                return res.status(403).json({
+                    message: "Vous avez déjà noté ce livre.",
+                });
+            } else {
+                return res.status(500).json({
+                    message:
+                        "Une erreur est survenue lors de la notation du livre.",
+                });
+            }
+        });
+};
