@@ -61,8 +61,8 @@ exports.getBooksByBestRating = (req, res, next) => {
 const checkInputFormat = (title, author, genre, year) => {
     const errors = [];
 
-    const titleRegex = /^[a-zA-Z0-9\sÀ-ÿ&;!?$£€.,':()]{3,50}$/; // Alphanumérique, espaces et caractères spéciaux
-    const textOnlyRegex = /^[a-zA-Z\sÀ-ÿ]{3,50}$/; // Alphabet, espaces et accents
+    const titleRegex = /^[a-zA-Z0-9\sÀ-ÿ.,:;!?¿$¥€+/\-_'&@+" ]{3,50}$/; // Alphanumérique, espaces et caractères spéciaux
+    const textOnlyRegex = /^[a-zA-Z\sÀ-ÿ.,:;!?¿$¥€+/\-_'&@+" ]{3,50}$/; // Alphabet, espaces et accents
     const yearRegex = /^\d{4}$/; // Format YYYY
 
     if (title && !titleRegex.test(title)) {
@@ -93,7 +93,10 @@ exports.createBook = (req, res, next) => {
         delete bookData._userId;
 
         // Vérifie si le livre existe déjà en vérifiant le titre et l'auteur
-        Book.findOne({ title: bookData.title, author: bookData.author })
+        Book.findOne({
+            title: bookData.title.trim(),
+            author: bookData.author.trim(),
+        })
             .then((existingBook) => {
                 if (existingBook) {
                     throw new Error("Ce livre existe déjà.");
@@ -101,7 +104,17 @@ exports.createBook = (req, res, next) => {
 
                 const { title, author, genre, year } = bookData;
 
-                const errors = checkInputFormat(title, author, genre, year);
+                const trimmedTitle = title.trim();
+                const trimmedAuthor = author.trim();
+                const trimmedGenre = genre.trim();
+                const trimmedYear = year.trim();
+
+                const errors = checkInputFormat(
+                    trimmedTitle,
+                    trimmedAuthor,
+                    trimmedGenre,
+                    trimmedYear
+                );
 
                 if (errors.length > 0) {
                     return res.status(400).json({ error: errors.join(" ") });
@@ -109,6 +122,10 @@ exports.createBook = (req, res, next) => {
 
                 const book = new Book({
                     ...bookData,
+                    title: trimmedTitle,
+                    author: trimmedAuthor,
+                    genre: trimmedGenre,
+                    year: trimmedYear,
                     userId: req.auth.userId,
                     imageUrl: `${req.protocol}://${req.get("host")}/images/${
                         req.file.filename
@@ -186,7 +203,18 @@ exports.updateBook = (req, res, next) => {
 
                 // Vérifie le format des champs
                 const { title, author, genre, year } = bookData;
-                const errors = checkInputFormat(title, author, genre, year);
+
+                const trimmedTitle = title.trim();
+                const trimmedAuthor = author.trim();
+                const trimmedGenre = genre.trim();
+                const trimmedYear = year.trim();
+
+                const errors = checkInputFormat(
+                    trimmedTitle,
+                    trimmedAuthor,
+                    trimmedGenre,
+                    trimmedYear
+                );
 
                 if (errors.length > 0) {
                     return res.status(400).json({ error: errors.join(" ") });
@@ -253,8 +281,6 @@ exports.deleteBook = (req, res, next) => {
 exports.rateBook = (req, res, next) => {
     const bookId = req.params.id;
     const { userId, rating } = req.body;
-
-    delete req.body._id;
 
     // Vérifie que la note est comprise entre 0 et 5
     const ratingFormat = /^[0-5]$/;
