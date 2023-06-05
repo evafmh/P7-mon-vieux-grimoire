@@ -130,8 +130,6 @@ exports.createBook = (req, res, next) => {
                     imageUrl: `${req.protocol}://${req.get("host")}/images/${
                         req.file.filename
                     }`,
-                    averageRating: 0, // Initialise la note moyenne à 0
-                    ratings: [], // Initialise le tableau d'évaluations à vide
                 });
 
                 book.save()
