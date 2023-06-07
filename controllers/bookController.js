@@ -58,10 +58,10 @@ exports.getBooksByBestRating = (req, res, next) => {
 };
 
 //Vérifie le format des inputs du livre
-const checkInputFormat = (title, author, genre, year) => {
+const checkBookInputsFormat = (title, author, genre, year) => {
     const errors = [];
 
-    const titleRegex = /^[a-zA-Z0-9\sÀ-ÿ.,:;!?¿$¥€+/\-_'&@+" ]{3,50}$/; // Alphanumérique, espaces et caractères spéciaux
+    const titleRegex = /^[a-zA-Z0-9\sÀ-ÿ.,:;!?¿$¥€+/\-_'&@+" ]{3,200}$/; // Alphanumérique, espaces et caractères spéciaux
     const textOnlyRegex = /^[a-zA-Z\sÀ-ÿ.,:;!?¿$¥€+/\-_'&@+" ]{3,50}$/; // Alphabet, espaces et accents
     const yearRegex = /^\d{4}$/; // Format YYYY
 
@@ -109,7 +109,7 @@ exports.createBook = (req, res, next) => {
                 const trimmedGenre = genre.trim();
                 const trimmedYear = year.trim();
 
-                const errors = checkInputFormat(
+                const errors = checkBookInputsFormat(
                     trimmedTitle,
                     trimmedAuthor,
                     trimmedGenre,
@@ -118,6 +118,16 @@ exports.createBook = (req, res, next) => {
 
                 if (errors.length > 0) {
                     return res.status(400).json({ error: errors.join(" ") });
+                }
+
+                // Vérifie si la note est nulle et force "ratings" à être vide
+                if (
+                    bookData.ratings &&
+                    bookData.ratings.length === 1 &&
+                    bookData.ratings[0].grade === 0
+                ) {
+                    bookData.ratings = [];
+                    bookData.averageRating = 0;
                 }
 
                 const book = new Book({
@@ -175,63 +185,70 @@ exports.updateBook = (req, res, next) => {
         .then((book) => {
             // Vérifie si le livre a été trouvé
             if (!book) {
-                res.status(404).json({
+                return res.status(404).json({
                     message: "Livre non trouvé.",
                 });
-            } else if (book.userId.toString() !== req.auth.userId) {
-                // Vérifie que l'utilisateur est le créateur du livre
-                res.status(403).json({
+            }
+
+            // Vérifie que l'utilisateur est le créateur du livre
+            if (book.userId.toString() !== req.auth.userId) {
+                return res.status(403).json({
                     message: "Vous n'êtes pas autorisé à modifier ce livre.",
                 });
-            } else {
-                // si un fichier a été chargé
-                if (req.file) {
-                    // Récupère le nom du fichier de l'ancienne image
-                    const oldFilename = book.imageUrl.split("/images/")[1];
-                    // Supprime l'ancienne image de manière synchrone
-                    try {
-                        fs.unlinkSync(`images/${oldFilename}`);
-                    } catch (error) {
-                        console.error(
-                            "Erreur lors de la suppression de l'ancienne image",
-                            error
-                        );
-                    }
-                }
-
-                // Vérifie le format des champs
-                const { title, author, genre, year } = bookData;
-
-                const trimmedTitle = title.trim();
-                const trimmedAuthor = author.trim();
-                const trimmedGenre = genre.trim();
-                const trimmedYear = year.trim();
-
-                const errors = checkInputFormat(
-                    trimmedTitle,
-                    trimmedAuthor,
-                    trimmedGenre,
-                    trimmedYear
-                );
-
-                if (errors.length > 0) {
-                    return res.status(400).json({ error: errors.join(" ") });
-                }
-
-                // Mettre à jour les données du livre
-                Book.updateOne(
-                    { _id: req.params.id },
-                    { ...bookData, _id: req.params.id }
-                )
-                    .then(() =>
-                        res.status(200).json({
-                            message: "Livre modifié avec succès !",
-                        })
-                    )
-                    .catch((error) => {
-                        res.status(400).json({ error });
-                    });
             }
+
+            // si un fichier a été chargé
+            if (req.file) {
+                // Récupère le nom du fichier de l'ancienne image
+                const oldFilename = book.imageUrl.split("/images/")[1];
+                // Supprime l'ancienne image de manière synchrone
+                try {
+                    fs.unlinkSync(`images/${oldFilename}`);
+                } catch (error) {
+                    console.error(
+                        "Erreur lors de la suppression de l'ancienne image",
+                        error
+                    );
+                }
+            }
+
+            // Vérifie le format des champs
+            const { title, author, genre, year } = bookData;
+
+            const trimmedTitle = title.trim();
+            const trimmedAuthor = author.trim();
+            const trimmedGenre = genre.trim();
+            const trimmedYear = year.trim();
+
+            const errors = checkBookInputsFormat(
+                trimmedTitle,
+                trimmedAuthor,
+                trimmedGenre,
+                trimmedYear
+            );
+            if (errors.length > 0) {
+                return res.status(400).json({ error: errors.join(" ") });
+            }
+
+            // Mettre à jour les données du livre
+            Book.updateOne(
+                { _id: req.params.id },
+                {
+                    title: trimmedTitle,
+                    author: trimmedAuthor,
+                    genre: trimmedGenre,
+                    year: trimmedYear,
+                    _id: req.params.id,
+                }
+            )
+                .then(() =>
+                    res.status(200).json({
+                        message: "Livre modifié avec succès !",
+                    })
+                )
+                .catch((error) => {
+                    res.status(400).json({ error });
+                });
         })
         .catch((error) => {
             res.status(500).json({ error });
@@ -284,6 +301,7 @@ exports.rateBook = (req, res, next) => {
     const ratingFormat = /^[0-5]$/;
     if (!ratingFormat.test(rating)) {
         return res.status(400).json({
+            error: "INVALID_RATING",
             message: "La note doit être un chiffre entre 0 et 5.",
         });
     }
@@ -292,13 +310,14 @@ exports.rateBook = (req, res, next) => {
         // Vérifie si le livre existe
         .then((book) => {
             if (!book) {
-                throw new Error("Livre introuvable.");
+                throw new Error("BOOK_NOT_FOUND");
             }
 
+            //Vérifie si l'utilisateur a déjà noté le livre
             return Book.findOne({ _id: bookId, "ratings.userId": userId }).then(
                 (alreadyRated) => {
                     if (alreadyRated) {
-                        throw new Error("Vous avez déjà noté ce livre.");
+                        throw new Error("ALREADY_RATED");
                     }
 
                     // Met à jour la moyenne des notations
@@ -310,55 +329,41 @@ exports.rateBook = (req, res, next) => {
 
                     const newTotalRating = sumRatings + rating;
                     const newAverageRating = Number(
-                        (newTotalRating / (book.ratings.length + 1)).toFixed(1)
+                        (newTotalRating / (book.ratings.length + 1)).toFixed(2)
                     );
 
-                    // Mise à jour des données du livre dans la base de données
+                    // Mise à jour des données du livre
+                    book.ratings.push({ userId, grade: rating });
                     book.averageRating = newAverageRating;
-                    book.totalRating += rating;
-                    // Sauvegarde les modifications du livre dans la base de données
-                    return (
-                        Book.findByIdAndUpdate(
-                            bookId,
-                            {
-                                $push: {
-                                    ratings: { userId, grade: rating },
-                                },
-                                averageRating: newAverageRating,
-                            },
-                            { new: true }
-                        )
-                            // Le livre a été mis à jour avec la nouvelle note
 
-                            .then((updatedBook) => {
-                                res.status(201).json({
-                                    message: "Livre noté avec succès.",
-                                    book: {
-                                        ...updatedBook,
-                                        id: updatedBook._id,
-                                    },
-                                });
-                            })
-                    );
+                    // Sauvegarde les modifications du livre dans la base de données
+                    return book.save().then((updatedBook) => {
+                        res.status(201).json({
+                            ...updatedBook._doc,
+                            id: updatedBook._doc._id,
+                        });
+                    });
                 }
             );
         })
 
         // Une erreur s'est produite lors de la notation du livre
         .catch((error) => {
-            if (error.message === "Livre introuvable.") {
-                return res.status(404).json({
-                    message: "Livre introuvable.",
-                });
-            } else if (error.message === "Vous avez déjà noté ce livre.") {
-                return res.status(403).json({
-                    message: "Vous avez déjà noté ce livre.",
-                });
-            } else {
-                return res.status(500).json({
-                    message:
-                        "Une erreur est survenue lors de la notation du livre.",
-                });
+            let statusCode = 500;
+            let errorMessage =
+                "Une erreur est survenue lors de la notation du livre.";
+
+            if (error.message === "BOOK_NOT_FOUND") {
+                statusCode = 404;
+                errorMessage = "Livre introuvable.";
+            } else if (error.message === "ALREADY_RATED") {
+                statusCode = 403;
+                errorMessage = "Vous avez déjà noté ce livre.";
             }
+
+            return res.status(statusCode).json({
+                error: error.message,
+                message: errorMessage,
+            });
         });
 };
