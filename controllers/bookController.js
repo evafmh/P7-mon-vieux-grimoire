@@ -85,81 +85,81 @@ const checkBookInputsFormat = (title, author, genre, year) => {
 };
 
 // Créer un livre
-exports.createBook = (req, res, next) => {
+exports.createBook = async (req, res, next) => {
     try {
         const bookData = JSON.parse(req.body.book);
 
         delete bookData._id;
         delete bookData._userId;
 
+        const { title, author, genre, year } = bookData;
+
+        const trimmedTitle = title.trim();
+        const trimmedAuthor = author.trim();
+        const trimmedGenre = genre.trim();
+        const trimmedYear = year.trim();
+
+        const errors = checkBookInputsFormat(
+            trimmedTitle,
+            trimmedAuthor,
+            trimmedGenre,
+            trimmedYear
+        );
+
+        if (errors.length > 0) {
+            // Supprime l'image si les inputs sont pas corrects
+            if (req.file) {
+                fs.unlinkSync(req.file.path);
+            }
+            return res.status(400).json({ error: errors.join(" ") });
+        }
+
         // Vérifie si le livre existe déjà en vérifiant le titre et l'auteur
-        Book.findOne({
-            title: bookData.title.trim(),
-            author: bookData.author.trim(),
-        })
-            .then((existingBook) => {
-                if (existingBook) {
-                    throw new Error("Ce livre existe déjà.");
-                }
+        const existingBook = await Book.findOne({
+            title: trimmedTitle,
+            author: trimmedAuthor,
+        });
 
-                const { title, author, genre, year } = bookData;
+        if (existingBook) {
+            // Supprime l'image si le livre existe déjà
+            if (req.file) {
+                fs.unlinkSync(req.file.path);
+            }
+            throw new Error("Ce livre existe déjà.");
+        }
 
-                const trimmedTitle = title.trim();
-                const trimmedAuthor = author.trim();
-                const trimmedGenre = genre.trim();
-                const trimmedYear = year.trim();
+        // Vérifie si la note est nulle et force "ratings" à être vide
+        if (
+            bookData.ratings &&
+            bookData.ratings.length === 1 &&
+            bookData.ratings[0].grade === 0
+        ) {
+            bookData.ratings = [];
+            bookData.averageRating = 0;
+        }
 
-                const errors = checkBookInputsFormat(
-                    trimmedTitle,
-                    trimmedAuthor,
-                    trimmedGenre,
-                    trimmedYear
-                );
+        const book = new Book({
+            ...bookData,
+            title: trimmedTitle,
+            author: trimmedAuthor,
+            genre: trimmedGenre,
+            year: trimmedYear,
+            userId: req.auth.userId,
+            imageUrl: `${req.protocol}://${req.get("host")}/images/${
+                req.file.filename
+            }`,
+        });
 
-                if (errors.length > 0) {
-                    return res.status(400).json({ error: errors.join(" ") });
-                }
+        await book.save();
 
-                // Vérifie si la note est nulle et force "ratings" à être vide
-                if (
-                    bookData.ratings &&
-                    bookData.ratings.length === 1 &&
-                    bookData.ratings[0].grade === 0
-                ) {
-                    bookData.ratings = [];
-                    bookData.averageRating = 0;
-                }
-
-                const book = new Book({
-                    ...bookData,
-                    title: trimmedTitle,
-                    author: trimmedAuthor,
-                    genre: trimmedGenre,
-                    year: trimmedYear,
-                    userId: req.auth.userId,
-                    imageUrl: `${req.protocol}://${req.get("host")}/images/${
-                        req.file.filename
-                    }`,
-                });
-
-                book.save()
-                    .then(() => {
-                        res.status(201).json({
-                            message: "Livre créé avec succès !",
-                        });
-                    })
-                    .catch((error) => {
-                        res.status(500).json({
-                            error: error.message,
-                        });
-                    });
-            })
-            .catch((error) => {
-                res.status(500).json({
-                    error: error.message,
-                });
-            });
+        res.status(201).json({
+            message: "Livre créé avec succès !",
+        });
     } catch (error) {
+        // Supprime l'image en cas d'erreur
+        if (req.file) {
+            fs.unlinkSync(req.file.path);
+        }
         res.status(400).json({
             error: error.message,
         });
@@ -218,13 +218,12 @@ exports.updateBook = (req, res, next) => {
             const trimmedTitle = title.trim();
             const trimmedAuthor = author.trim();
             const trimmedGenre = genre.trim();
-            const trimmedYear = year.trim();
 
             const errors = checkBookInputsFormat(
                 trimmedTitle,
                 trimmedAuthor,
                 trimmedGenre,
-                trimmedYear
+                year
             );
             if (errors.length > 0) {
                 return res.status(400).json({ error: errors.join(" ") });
@@ -237,7 +236,7 @@ exports.updateBook = (req, res, next) => {
                     title: trimmedTitle,
                     author: trimmedAuthor,
                     genre: trimmedGenre,
-                    year: trimmedYear,
+                    year,
                     _id: req.params.id,
                 }
             )
