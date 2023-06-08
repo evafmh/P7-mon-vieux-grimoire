@@ -1,5 +1,6 @@
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
+require("dotenv").config({ path: ".env.local" });
 const User = require("../models/User");
 
 // Regex pour les formats d'emails et de mots de passe
@@ -64,7 +65,7 @@ exports.login = (req, res) => {
                         userId: user._id,
                         token: jwt.sign(
                             { userId: user._id },
-                            "RANDOM_TOKEN_SECRET",
+                            process.env.TOKEN_SECRET,
                             { expiresIn: "24h" }
                         ),
                     });
