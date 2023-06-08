@@ -118,7 +118,7 @@ exports.createBook = async (req, res, next) => {
         if (errors.length > 0) {
             // Supprime l'image si les inputs sont pas corrects
             if (req.file) {
-                fs.unlinkSync(req.file.path);
+                deleteImage(req.file.path);
             }
             return res.status(400).json({ error: errors.join(" ") });
         }
@@ -132,7 +132,7 @@ exports.createBook = async (req, res, next) => {
         if (existingBook) {
             // Supprime l'image si le livre existe déjà
             if (req.file) {
-                fs.unlinkSync(req.file.path);
+                deleteImage(req.file.path);
             }
             throw new Error("Ce livre existe déjà.");
         }
@@ -167,7 +167,7 @@ exports.createBook = async (req, res, next) => {
     } catch (error) {
         // Supprime l'image en cas d'erreur
         if (req.file) {
-            fs.unlinkSync(req.file.path);
+            deleteImage(req.file.path);
         }
         res.status(400).json({
             error: error.message,
