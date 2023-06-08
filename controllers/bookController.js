@@ -84,6 +84,15 @@ const checkBookInputsFormat = (title, author, genre, year) => {
     return errors;
 };
 
+// Fonction utilitaire pour supprimer une image
+const deleteImage = (imagePath) => {
+    try {
+        fs.unlinkSync(imagePath);
+    } catch (error) {
+        console.error("Erreur lors de la suppression de l'image", error);
+    }
+};
+
 // Créer un livre
 exports.createBook = async (req, res, next) => {
     try {
@@ -167,91 +176,103 @@ exports.createBook = async (req, res, next) => {
 };
 
 // Modifier un livre
-exports.updateBook = (req, res, next) => {
-    // Vérifie si une image a été téléchargée, si oui on traite l'image sinon on traite l'objet
-    const bookData = req.file
-        ? {
-              ...JSON.parse(req.body.book),
-              // Mise à jour de l'imageUrl du livre avec la nouvelle image
-              imageUrl: `${req.protocol}://${req.get("host")}/images/${
-                  req.file.filename
-              }`,
-          }
-        : { ...req.body };
-    delete bookData._userId;
+exports.updateBook = async (req, res, next) => {
+    let book;
+    try {
+        // Vérifie si une image a été téléchargée, si oui on traite l'image sinon on traite l'objet
+        const bookData = req.file
+            ? { ...JSON.parse(req.body.book) }
+            : { ...req.body };
+        delete bookData._userId;
 
-    // Recherche le livre en fonction de l'id
-    Book.findOne({ _id: req.params.id })
-        .then((book) => {
-            // Vérifie si le livre a été trouvé
-            if (!book) {
-                return res.status(404).json({
-                    message: "Livre non trouvé.",
-                });
-            }
+        // Recherche le livre en fonction de l'id
+        const book = await Book.findOne({ _id: req.params.id });
 
-            // Vérifie que l'utilisateur est le créateur du livre
-            if (book.userId.toString() !== req.auth.userId) {
-                return res.status(403).json({
-                    message: "Vous n'êtes pas autorisé à modifier ce livre.",
-                });
-            }
+        // Vérifie si le livre a été trouvé
+        if (!book) {
+            return res.status(404).json({
+                message: "Livre non trouvé.",
+            });
+        }
 
-            // si un fichier a été chargé
+        // Vérifie que l'utilisateur est le créateur du livre
+        if (book.userId.toString() !== req.auth.userId) {
+            return res.status(403).json({
+                message: "Vous n'êtes pas autorisé à modifier ce livre.",
+            });
+        }
+
+        // Sauvegarde l'ancienne image
+        const oldImageUrl = book.imageUrl;
+
+        // Vérifie le format des champs
+        const { title, author, genre, year } = bookData;
+
+        const trimmedTitle = title.trim();
+        const trimmedAuthor = author.trim();
+        const trimmedGenre = genre.trim();
+
+        const errors = checkBookInputsFormat(
+            trimmedTitle,
+            trimmedAuthor,
+            trimmedGenre,
+            year
+        );
+        if (errors.length > 0) {
             if (req.file) {
-                // Récupère le nom du fichier de l'ancienne image
-                const oldFilename = book.imageUrl.split("/images/")[1];
-                // Supprime l'ancienne image de manière synchrone
-                try {
-                    fs.unlinkSync(`images/${oldFilename}`);
-                } catch (error) {
-                    console.error(
-                        "Erreur lors de la suppression de l'ancienne image",
-                        error
-                    );
-                }
+                deleteImage(`images/${req.file.filename}`);
             }
+            return res.status(400).json({ error: errors.join(" ") });
+        }
 
-            // Vérifie le format des champs
-            const { title, author, genre, year } = bookData;
+        // si un fichier a été chargé
+        if (req.file) {
+            // Récupère le nom du fichier de l'ancienne image
+            const oldFilename = book.imageUrl.split("/images/")[1];
 
-            const trimmedTitle = title.trim();
-            const trimmedAuthor = author.trim();
-            const trimmedGenre = genre.trim();
+            // Met à jour l'URL de la nouvelle image
+            const newImageUrl = `${req.protocol}://${req.get("host")}/images/${
+                req.file.filename
+            }`;
+            book.imageUrl = newImageUrl;
 
-            const errors = checkBookInputsFormat(
-                trimmedTitle,
-                trimmedAuthor,
-                trimmedGenre,
-                year
-            );
-            if (errors.length > 0) {
-                return res.status(400).json({ error: errors.join(" ") });
+            // Supprime l'ancienne image
+            deleteImage(`images/${oldFilename}`);
+        }
+
+        // Mettre à jour les données du livre
+        await Book.updateOne(
+            { _id: req.params.id },
+            {
+                title: trimmedTitle,
+                author: trimmedAuthor,
+                genre: trimmedGenre,
+                year,
             }
+        );
 
-            // Mettre à jour les données du livre
-            Book.updateOne(
-                { _id: req.params.id },
-                {
-                    title: trimmedTitle,
-                    author: trimmedAuthor,
-                    genre: trimmedGenre,
-                    year,
-                    _id: req.params.id,
-                }
-            )
-                .then(() =>
-                    res.status(200).json({
-                        message: "Livre modifié avec succès !",
-                    })
-                )
-                .catch((error) => {
-                    res.status(400).json({ error });
-                });
-        })
-        .catch((error) => {
-            res.status(500).json({ error });
+        // Mettre à jour les données de l'image uniquement si la modification a réussi
+        if (req.file) {
+            await book.updateOne({ imageUrl: book.imageUrl });
+        }
+
+        res.status(200).json({
+            message: "Livre modifié avec succès !",
         });
+    } catch (error) {
+        // Supprime la nouvelle image en cas d'erreur
+        if (req.file) {
+            deleteImage(req.file.path);
+        }
+
+        // Restaure l'ancienne image
+        if (oldImageUrl) {
+            book.imageUrl = oldImageUrl;
+            await book.save();
+        }
+
+        res.status(400).json({ error: error.message });
+    }
 };
 
 // Supprimer un livre
