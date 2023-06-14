@@ -16,7 +16,9 @@ exports.getAllBooks = (req, res, next) => {
         })
         .catch((error) => {
             res.status(500).json({
-                error: "Une erreur est survenue lors de la récupération des livres.",
+                message:
+                    "Une erreur est survenue lors de la récupération des livres.",
+                error: error,
             });
         });
 };
@@ -29,7 +31,8 @@ exports.getBookById = (req, res, next) => {
         .then((book) => {
             if (!book) {
                 return res.status(404).json({
-                    error: "Livre non trouvé.",
+                    message: "Livre non trouvé.",
+                    error: error,
                 });
             }
 
@@ -37,7 +40,9 @@ exports.getBookById = (req, res, next) => {
         })
         .catch((error) => {
             res.status(500).json({
-                error: "Une erreur est survenue lors de la récupération du livre.",
+                message:
+                    "Une erreur est survenue lors de la récupération du livre.",
+                error: error,
             });
         });
 };
@@ -52,7 +57,9 @@ exports.getBooksByBestRating = (req, res, next) => {
         })
         .catch((error) => {
             res.status(500).json({
-                error: "Une erreur est survenue lors de la récupération des livres avec la meilleure note.",
+                message:
+                    "Une erreur est survenue lors de la récupération des livres avec la meilleure note.",
+                error: error,
             });
         });
 };
@@ -120,7 +127,7 @@ exports.createBook = async (req, res, next) => {
             if (req.file) {
                 deleteImage(req.file.path);
             }
-            return res.status(400).json({ error: errors.join(" ") });
+            return res.status(400).json({ message: errors.join(" ") });
         }
 
         // Vérifie si le livre existe déjà en vérifiant le titre et l'auteur
@@ -178,6 +185,7 @@ exports.createBook = async (req, res, next) => {
 // Modifier un livre
 exports.updateBook = async (req, res, next) => {
     let book;
+    let oldImageUrl;
     try {
         // Vérifie si une image a été téléchargée, si oui on traite l'image sinon on traite l'objet
         const bookData = req.file
@@ -186,7 +194,7 @@ exports.updateBook = async (req, res, next) => {
         delete bookData._userId;
 
         // Recherche le livre en fonction de l'id
-        const book = await Book.findOne({ _id: req.params.id });
+        book = await Book.findOne({ _id: req.params.id });
 
         // Vérifie si le livre a été trouvé
         if (!book) {
@@ -203,7 +211,7 @@ exports.updateBook = async (req, res, next) => {
         }
 
         // Sauvegarde l'ancienne image
-        const oldImageUrl = book.imageUrl;
+        oldImageUrl = book.imageUrl;
 
         // Vérifie le format des champs
         const { title, author, genre, year } = bookData;
@@ -222,7 +230,7 @@ exports.updateBook = async (req, res, next) => {
             if (req.file) {
                 deleteImage(`images/${req.file.filename}`);
             }
-            return res.status(400).json({ error: errors.join(" ") });
+            return res.status(400).json({ message: errors.join(" ") });
         }
 
         // si un fichier a été chargé
@@ -235,25 +243,20 @@ exports.updateBook = async (req, res, next) => {
                 req.file.filename
             }`;
             book.imageUrl = newImageUrl;
-
-            // Supprime l'ancienne image
-            deleteImage(`images/${oldFilename}`);
         }
 
         // Mettre à jour les données du livre
-        await Book.updateOne(
-            { _id: req.params.id },
-            {
-                title: trimmedTitle,
-                author: trimmedAuthor,
-                genre: trimmedGenre,
-                year,
-            }
-        );
+        await book.updateOne({
+            title: book.title,
+            author: book.author,
+            genre: book.genre,
+            year: book.year,
+            imageUrl: req.file ? book.imageUrl : oldImageUrl,
+        });
 
-        // Mettre à jour les données de l'image uniquement si la modification a réussi
+        // Supprime l'ancienne image si un fichier a été chargé
         if (req.file) {
-            await book.updateOne({ imageUrl: book.imageUrl });
+            deleteImage(`images/${oldFilename}`);
         }
 
         res.status(200).json({
@@ -263,10 +266,7 @@ exports.updateBook = async (req, res, next) => {
         // Supprime la nouvelle image en cas d'erreur
         if (req.file) {
             deleteImage(req.file.path);
-        }
-
-        // Restaure l'ancienne image
-        if (oldImageUrl) {
+            // Restaure l'ancienne image
             book.imageUrl = oldImageUrl;
             await book.save();
         }
@@ -294,17 +294,16 @@ exports.deleteBook = (req, res, next) => {
             } else {
                 // Récupère le nom du fichier
                 const filename = book.imageUrl.split("/images/")[1];
-                // Supprime le fichier
-                fs.unlink(`images/${filename}`, () => {
-                    // Supprime le livre de la base de données
-                    Book.deleteOne({ _id: bookId })
-                        .then(() =>
-                            res.status(200).json({
-                                message: "Livre supprimé avec succès !",
-                            })
-                        )
-                        .catch((error) => res.status(400).json({ error }));
-                });
+                // Supprime le livre de la base de données
+                Book.deleteOne({ _id: bookId })
+                    .then(() => {
+                        // Supprime l'image
+                        deleteImage(`images/${filename}`);
+                        res.status(200).json({
+                            message: "Livre supprimé avec succès !",
+                        });
+                    })
+                    .catch((error) => res.status(400).json({ error }));
             }
         })
         .catch((error) => res.status(500).json({ error }));
@@ -318,8 +317,7 @@ exports.rateBook = (req, res, next) => {
     const { userId, rating } = req.body;
 
     // Vérifie que la note est comprise entre 0 et 5
-    const ratingFormat = /^[0-5]$/;
-    if (!ratingFormat.test(rating)) {
+    if (rating < 0 || rating > 5) {
         return res.status(400).json({
             error: "INVALID_RATING",
             message: "La note doit être un chiffre entre 0 et 5.",
@@ -369,21 +367,22 @@ exports.rateBook = (req, res, next) => {
 
         // Une erreur s'est produite lors de la notation du livre
         .catch((error) => {
-            let statusCode = 500;
-            let errorMessage =
-                "Une erreur est survenue lors de la notation du livre.";
-
             if (error.message === "BOOK_NOT_FOUND") {
-                statusCode = 404;
-                errorMessage = "Livre introuvable.";
+                return res.status(404).json({
+                    error: error.message,
+                    message: "Livre introuvable.",
+                });
             } else if (error.message === "ALREADY_RATED") {
-                statusCode = 403;
-                errorMessage = "Vous avez déjà noté ce livre.";
+                return res.status(403).json({
+                    error: error.message,
+                    message: "Vous avez déjà noté ce livre.",
+                });
+            } else {
+                return res.status(500).json({
+                    error: error.message,
+                    message:
+                        "Une erreur est survenue lors de la notation du livre.",
+                });
             }
-
-            return res.status(statusCode).json({
-                error: error.message,
-                message: errorMessage,
-            });
         });
 };
