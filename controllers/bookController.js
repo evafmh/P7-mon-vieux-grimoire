@@ -227,17 +227,14 @@ exports.updateBook = async (req, res, next) => {
             year
         );
         if (errors.length > 0) {
-            if (req.file) {
-                deleteImage(`images/${req.file.filename}`);
-            }
-            return res.status(400).json({ message: errors.join(" ") });
+            throw new Error(`INPUTS_NOT_VALID: ${errors.join(" ")}`);
         }
+
+        // Récupère le nom du fichier de l'ancienne image
+        const oldFilename = book.imageUrl.split("/images/")[1];
 
         // si un fichier a été chargé
         if (req.file) {
-            // Récupère le nom du fichier de l'ancienne image
-            const oldFilename = book.imageUrl.split("/images/")[1];
-
             // Met à jour l'URL de la nouvelle image
             const newImageUrl = `${req.protocol}://${req.get("host")}/images/${
                 req.file.filename
@@ -266,9 +263,16 @@ exports.updateBook = async (req, res, next) => {
         // Supprime la nouvelle image en cas d'erreur
         if (req.file) {
             deleteImage(req.file.path);
-            // Restaure l'ancienne image
-            book.imageUrl = oldImageUrl;
-            await book.save();
+            try {
+                // Restaure l'ancienne image
+                book.imageUrl = oldImageUrl;
+                await book.save();
+            } catch (error) {
+                console.error(
+                    "Erreur lors de la restauration de l'image :",
+                    error
+                );
+            }
         }
 
         res.status(400).json({ error: error.message });
