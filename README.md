@@ -7,6 +7,7 @@ Ce dépôt contient le backend de l'application Mon Vieux Grimoire : un site web
 Avant d'installer et d'exécuter ce projet, assurez-vous d'avoir installé :
 
 -   Node.js (version v20.2.0)
+-   npm (version 9.6.6)
 
 ## Installation
 
