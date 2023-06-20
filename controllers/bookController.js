@@ -244,10 +244,10 @@ exports.updateBook = async (req, res, next) => {
 
         // Mettre à jour les données du livre
         await book.updateOne({
-            title: book.title,
-            author: book.author,
-            genre: book.genre,
-            year: book.year,
+            title: trimmedTitle,
+            author: trimmedAuthor,
+            genre: trimmedGenre,
+            year: year,
             imageUrl: req.file ? book.imageUrl : oldImageUrl,
         });
 
@@ -265,8 +265,7 @@ exports.updateBook = async (req, res, next) => {
             deleteImage(req.file.path);
             try {
                 // Restaure l'ancienne image
-                book.imageUrl = oldImageUrl;
-                await book.save();
+                await book.updateOne({ imageUrl: oldImageUrl });
             } catch (error) {
                 console.error(
                     "Erreur lors de la restauration de l'image :",
